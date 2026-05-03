@@ -158,7 +158,7 @@ async function procesarMensaje(message) {
   if (text.toLowerCase().startsWith("pro ")) {
     return sendMessage(chatId, "Comprobante recibido. Activaremos el Plan Pro en menos de 1 hora. Gracias!");
   }
-
+console.log("TIPO:", message.voice ? "voice" : message.audio ? "audio" : message.text ? "text" : "otro");
   if (message.voice || message.audio) {
     await sendMessage(chatId, "Transcribiendo tu audio...");
     const fileId = message.voice?.file_id || message.audio?.file_id;

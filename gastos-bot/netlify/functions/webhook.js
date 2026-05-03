@@ -210,7 +210,7 @@ export const handler = async (event) => {
   const userName = message.from.first_name || "Usuario";
 
   try {
-    console.log("START - telegramId:", telegramId, "text:", text);
+    console.log("START - telegramId:", telegramId, "rawText:", (message.text || ""));
     const user = await getOrCreateUser(telegramId, userName);
     console.log("USER:", JSON.stringify(user));
 

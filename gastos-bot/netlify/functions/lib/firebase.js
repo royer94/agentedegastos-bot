@@ -2,7 +2,7 @@
 // Usa Upstash Redis REST API — simple, rapido, sin SDK pesado
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || "https://distinct-parakeet-114368.upstash.io";
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "gQAAAAAAAb7AAAIgcDFkZjY2M2I0NmUwYmI0YTc2YTA0NzA0ZWZkMGJiZGZlZg";
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "gQAAAAAAAb7AAAIgcDE4OGRhNmE4NWU3YzM0NGMyYWE3NmRjOTA4NzYwY2Q1NA";
 
 async function redis(command, ...args) {
   const res = await fetch(`${REDIS_URL}/${command}/${args.map(a => encodeURIComponent(a)).join("/")}`, {

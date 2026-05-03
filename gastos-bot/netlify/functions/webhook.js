@@ -210,7 +210,9 @@ export const handler = async (event) => {
   const userName = message.from.first_name || "Usuario";
 
   try {
+    console.log("START - telegramId:", telegramId, "text:", text);
     const user = await getOrCreateUser(telegramId, userName);
+    console.log("USER:", JSON.stringify(user));
 
     // FIX BUG 2: normalizar comando quitando @username si viene de grupo
     // Ej: "/hoy@Agentedegastos_bot" -> "/hoy"

@@ -214,6 +214,7 @@ export const handler = async (event) => {
   }
 
   // Procesar en background sin bloquear la respuesta
+  console.log("MENSAJE RECIBIDO:", JSON.stringify(body).substring(0, 200));
   procesarMensaje(body).catch((err) => console.error("Error procesando:", err));
 
   // Responder 200 inmediatamente para que Telegram no reintente

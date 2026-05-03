@@ -50,7 +50,9 @@ async function handleHoy(chatId, telegramId) {
   await sendMessage(chatId, "Buscando tus gastos de hoy...");
   const gastos = await obtenerResumenHoy(telegramId);
   if (!gastos.length) return sendMessage(chatId, "No has registrado gastos hoy. Comienza diciendome en que gastaste!");
+  console.log("GASTOS:", gastos.length);
   const resumen = await generarResumen(gastos, "hoy");
+  console.log("RESUMEN:", JSON.stringify(resumen).substring(0, 100));
   const detalles = gastos.slice(0, 8)
     .map((g) => "- " + formatCategoria(g.categoria) + ": " + formatCOP(g.monto) + " | " + g.descripcion)
     .join("\n");

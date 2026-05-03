@@ -8,7 +8,8 @@ function getDb() {
   if (db) return db;
 
   if (!getApps().length) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    console.log("FIREBASE ENV:", process.env.FIREBASE_SERVICE_ACCOUNT ? "presente" : "AUSENTE");
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     initializeApp({ credential: cert(serviceAccount) });
   }
 

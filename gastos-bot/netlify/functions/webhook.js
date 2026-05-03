@@ -16,15 +16,9 @@ function formatCOP(monto) {
 
 function formatCategoria(cat) {
   const map = {
-    Comida: "Comida",
-    Transporte: "Transporte",
-    Salud: "Salud",
-    Entretenimiento: "Entretenimiento",
-    Ropa: "Ropa",
-    Hogar: "Hogar",
-    Trabajo: "Trabajo",
-    Ahorro: "Ahorro",
-    Otro: "Otro",
+    Comida: "Comida", Transporte: "Transporte", Salud: "Salud",
+    Entretenimiento: "Entretenimiento", Ropa: "Ropa", Hogar: "Hogar",
+    Trabajo: "Trabajo", Ahorro: "Ahorro", Otro: "Otro",
   };
   return map[cat] || cat;
 }
@@ -36,7 +30,7 @@ async function handleStart(chatId, user) {
   const estado = user.plan === "pro"
     ? "Plan Pro activo - registros ilimitados."
     : "Tienes " + user.credits + " registros gratuitos disponibles.";
-  const msg =
+  await sendMessage(chatId,
     saludo + "\n\n" + estado + "\n\n" +
     "Solo dime lo que gastaste en texto o audio:\n\n" +
     "Ejemplos:\n" +
@@ -48,16 +42,14 @@ async function handleStart(chatId, user) {
     "/semana - resumen semanal\n" +
     "/mes - resumen del mes\n" +
     "/ayuda - todos los comandos\n" +
-    "/pro - plan ilimitado";
-  await sendMessage(chatId, msg);
+    "/pro - plan ilimitado"
+  );
 }
 
 async function handleHoy(chatId, telegramId) {
   await sendMessage(chatId, "Buscando tus gastos de hoy...");
   const gastos = await obtenerResumenHoy(telegramId);
-  if (!gastos.length) {
-    return sendMessage(chatId, "No has registrado gastos hoy. Comienza diciendome en que gastaste!");
-  }
+  if (!gastos.length) return sendMessage(chatId, "No has registrado gastos hoy. Comienza diciendome en que gastaste!");
   const resumen = await generarResumen(gastos, "hoy");
   const detalles = gastos.slice(0, 8)
     .map((g) => "- " + formatCategoria(g.categoria) + ": " + formatCOP(g.monto) + " | " + g.descripcion)
@@ -68,9 +60,7 @@ async function handleHoy(chatId, telegramId) {
 async function handleSemana(chatId, telegramId) {
   await sendMessage(chatId, "Analizando tu semana...");
   const gastos = await obtenerResumenSemanal(telegramId);
-  if (!gastos.length) {
-    return sendMessage(chatId, "No tienes gastos registrados esta semana.");
-  }
+  if (!gastos.length) return sendMessage(chatId, "No tienes gastos registrados esta semana.");
   const resumen = await generarResumen(gastos, "esta semana");
   const porCat = Object.entries(resumen.porCategoria)
     .sort((a, b) => b[1] - a[1])
@@ -82,9 +72,7 @@ async function handleSemana(chatId, telegramId) {
 async function handleMes(chatId, telegramId) {
   await sendMessage(chatId, "Calculando tu mes...");
   const gastos = await obtenerResumenMes(telegramId);
-  if (!gastos.length) {
-    return sendMessage(chatId, "No tienes gastos registrados este mes.");
-  }
+  if (!gastos.length) return sendMessage(chatId, "No tienes gastos registrados este mes.");
   const resumen = await generarResumen(gastos, "este mes");
   const top3 = Object.entries(resumen.porCategoria)
     .sort((a, b) => b[1] - a[1])
@@ -95,9 +83,7 @@ async function handleMes(chatId, telegramId) {
 }
 
 async function handlePro(chatId, user) {
-  if (user.plan === "pro") {
-    return sendMessage(chatId, "Ya tienes el Plan Pro activo! Registros ilimitados.");
-  }
+  if (user.plan === "pro") return sendMessage(chatId, "Ya tienes el Plan Pro activo! Registros ilimitados.");
   await sendMessage(chatId,
     "Plan Pro - $15.000 COP/mes\n\n" +
     "- Registros ilimitados\n" +
@@ -127,15 +113,9 @@ async function handleAyuda(chatId) {
 
 async function procesarGasto(chatId, telegramId, texto, esAudio) {
   const credito = await descontarCredito(telegramId);
-  if (!credito.ok) {
-    return sendMessage(chatId, "Se te acabaron los registros gratuitos. Usa /pro para continuar.");
-  }
+  if (!credito.ok) return sendMessage(chatId, "Se te acabaron los registros gratuitos. Usa /pro para continuar.");
   const gasto = await extraerGasto(texto);
-  if (!gasto.esGasto) {
-    return sendMessage(chatId,
-      "No entendi eso como un gasto. Ejemplos:\n- Gaste 20 mil en el bus\n- Pague 50 lucas en el super\n\nUsa /ayuda para ver los comandos."
-    );
-  }
+  if (!gasto.esGasto) return sendMessage(chatId, "No entendi eso como un gasto. Ejemplo: Gaste 20 mil en el bus");
   await guardarGasto(telegramId, {
     monto: gasto.monto,
     descripcion: gasto.descripcion,
@@ -156,16 +136,12 @@ async function procesarGasto(chatId, telegramId, texto, esAudio) {
   }
 }
 
-async function procesarMensaje(body) {
-  const message = body.message;
-  if (!message) return;
-
+async function procesarMensaje(message) {
   const chatId = message.chat.id;
   const telegramId = message.from.id;
   const userName = message.from.first_name || "Usuario";
 
   const user = await getOrCreateUser(telegramId, userName);
-  console.log("USER OK:", telegramId, user.plan);
 
   const rawText = message.text || "";
   const text = rawText.replace(/@\w+/, "").trim();
@@ -199,8 +175,7 @@ async function procesarMensaje(body) {
   }
 }
 
-// HANDLER PRINCIPAL
-// Responde 200 a Telegram INMEDIATAMENTE y procesa en background
+// HANDLER PRINCIPAL — procesa completamente antes de responder
 export const handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 200, body: "OK" };
@@ -213,10 +188,18 @@ export const handler = async (event) => {
     return { statusCode: 200, body: "OK" };
   }
 
-  // Procesar en background sin bloquear la respuesta
-  console.log("MENSAJE RECIBIDO:", JSON.stringify(body).substring(0, 200));
-  procesarMensaje(body).catch((err) => console.error("Error procesando:", err));
+  const message = body.message;
+  if (!message) return { statusCode: 200, body: "OK" };
 
-  // Responder 200 inmediatamente para que Telegram no reintente
+  // Procesar completamente — Netlify Functions espera hasta que termine
+  try {
+    await procesarMensaje(message);
+  } catch (err) {
+    console.error("Error:", err.message);
+    try {
+      await sendMessage(message.chat.id, "Ocurrio un error. Intenta de nuevo.");
+    } catch {}
+  }
+
   return { statusCode: 200, body: "OK" };
 };

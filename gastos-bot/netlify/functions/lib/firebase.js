@@ -1,8 +1,8 @@
 // netlify/functions/lib/firebase.js
 // Usa Upstash Redis REST API — simple, rapido, sin SDK pesado
 
-const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || "https://distinct-parakeet-114368.upstash.io";
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "gQAAAAAAAb7AAAIgcDFkZjY2M2I0NmUwYmI0YTc2YTA0NzA0ZWZkMGJiZGZlZg";
 
 async function redis(command, ...args) {
   const res = await fetch(`${REDIS_URL}/${command}/${args.map(a => encodeURIComponent(a)).join("/")}`, {

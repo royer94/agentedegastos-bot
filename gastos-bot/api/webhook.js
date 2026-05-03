@@ -350,7 +350,7 @@ export default async function handler(req, res) {
     else if (textLower.startsWith("meta ")) await handleMeta(chatId, telegramId, user, text.split(" ").slice(1).join(" "));
     else if (textLower.startsWith("borrar ")) await handleBorrarNumero(chatId, telegramId, text.split(" ")[1]);
     else if (textLower.startsWith("pro ")) await sendMessage(chatId, "Comprobante recibido. Te activamos en menos de 1 hora. Gracias!");
-    else if (textLower.startsWith("ingrese ") || textLower.startsWith("entre ") || textLower.startsWith("recibi ")) await procesarIngreso(chatId, telegramId, text);
+    else if (textLower.startsWith("ingrese ") || textLower.startsWith("entre ") || textLower.startsWith("recibi ") || textLower.startsWith("me pagaron ") || textLower.startsWith("me consignaron ") || textLower.startsWith("cai ") || textLower.startsWith("me cayo ")) await procesarIngreso(chatId, telegramId, text);
     else if (message.voice || message.audio) {
       await sendMessage(chatId, "Transcribiendo tu audio...");
       const fileId = message.voice?.file_id || message.audio?.file_id;
@@ -360,7 +360,7 @@ export default async function handler(req, res) {
       if (!transcripcion || transcripcion.trim().length < 3) return res.status(200).send("OK");
       await sendMessage(chatId, "Escuche: " + transcripcion);
       const t = transcripcion.toLowerCase();
-      if (t.startsWith("ingrese ") || t.startsWith("entre ") || t.startsWith("recibi ")) {
+      if (t.startsWith("ingrese ") || t.startsWith("entre ") || t.startsWith("recibi ") || t.startsWith("me pagaron ") || t.startsWith("me consignaron ") || t.startsWith("cai ") || t.startsWith("me cayo ")) {
         await procesarIngreso(chatId, telegramId, transcripcion);
       } else {
         await procesarGasto(chatId, telegramId, transcripcion, true, user);

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GastosBot — Control de gastos con IA</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f23;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #1a1a2e;
+      border-radius: 20px;
+      padding: 48px 40px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      border: 1px solid #2a2a4a;
+    }
+    .emoji { font-size: 64px; margin-bottom: 16px; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: #fff; }
+    .subtitle { color: #888; font-size: 16px; margin-bottom: 32px; line-height: 1.5; }
+    .features {
+      background: #0f0f23;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 28px;
+      text-align: left;
+    }
+    .feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .feature:last-child { margin-bottom: 0; }
+    .feature-icon { font-size: 18px; flex-shrink: 0; }
+    .cta {
+      display: inline-block;
+      background: #2AABEE;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 14px 32px;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: background 0.2s;
+      width: 100%;
+    }
+    .cta:hover { background: #1a9bde; }
+    .free-badge {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #666;
+    }
+    .free-badge span { color: #4ade80; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="emoji">💰</div>
+    <h1>GastosBot</h1>
+    <p class="subtitle">Controla tus gastos con voz o texto.<br>Sin formularios. Sin apps complicadas.</p>
+
+    <div class="features">
+      <div class="feature">
+        <span class="feature-icon">🎙️</span>
+        <span>Manda un audio: <em>"Gasté 15 mil en almuerzo"</em> y listo</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🤖</span>
+        <span>La IA categoriza y registra automáticamente</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">📊</span>
+        <span>Resúmenes diarios, semanales y mensuales con insights</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🇨🇴</span>
+        <span>En español colombiano. Entiende "lucas", "palo", "luca"</span>
+      </div>
+    </div>
+
+    <a href="https://t.me/TU_BOT_AQUI" class="cta">
+      Abrir en Telegram →
+    </a>
+    <p class="free-badge"><span>20 registros gratis</span> para empezar. Sin tarjeta.</p>
+  </div>
+</body>
+</html>

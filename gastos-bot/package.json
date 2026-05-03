@@ -1,0 +1,15 @@
+{
+  "name": "gastos-bot",
+  "version": "1.0.0",
+  "description": "Bot de Telegram para control de gastos personales con IA",
+  "main": "index.js",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "groq-sdk": "^0.9.0",
+    "firebase-admin": "^12.0.0",
+    "node-fetch": "^3.3.2",
+    "form-data": "^4.0.0"
+  }
+}

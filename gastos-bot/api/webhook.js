@@ -4,7 +4,7 @@ import {
   getOrCreateUser, descontarCredito, guardarGasto, guardarIngreso,
   obtenerResumenHoy, obtenerResumenSemanal, obtenerResumenSemanaPasada,
   obtenerResumenMes, obtenerIngresosMes, obtenerTodosGastos,
-  obtenerUltimosGastos, borrarGasto, borrarTodosGastos,
+  obtenerUltimosGastos, borrarGasto,
   obtenerMeta, guardarMeta,
 } from "../netlify/functions/lib/firebase.js";
 
@@ -31,11 +31,23 @@ function esIngreso(texto) {
 // ─── COMANDOS ─────────────────────────────────────────────────────────────────
 
 async function handleStart(chatId, user) {
+  // Avisar si el Pro vencio
+  if (user.proVencido) {
+    await sendMessage(chatId,
+      "Tu Plan Pro ha vencido. Volviste al plan gratuito con 20 registros.
+
+" +
+      "Para renovar usa /pro - solo $15.000 COP/mes."
+    );
+  }
   const saludo = user.isNew
     ? "Hola " + user.name + "! Soy tu asistente de gastos personales."
     : "Bienvenido de vuelta " + user.name + "!";
+  const diasRestantes = user.plan === "pro" && user.proExpira
+    ? Math.ceil((new Date(user.proExpira) - new Date()) / (1000 * 60 * 60 * 24))
+    : null;
   const estado = user.plan === "pro"
-    ? "Plan Pro activo - registros ilimitados."
+    ? "Plan Pro activo - registros ilimitados. Vence en " + diasRestantes + " dias."
     : "Tienes " + user.credits + " registros gratuitos disponibles.";
   await sendMessage(chatId,
     saludo + "\n\n" + estado + "\n\n" +
@@ -51,7 +63,6 @@ async function handleStart(chatId, user) {
     "/top - categorias con mas gasto\n" +
     "/gastos - ver y gestionar gastos recientes\n" +
     "/borrar - borra el ultimo gasto\n" +
-    "/resetgastos - borra todos los gastos\n" +
     "/compartir - resumen para compartir\n" +
     "/meta - meta de gasto mensual (Pro)\n" +
     "/pro - ver plan ilimitado\n" +
@@ -182,11 +193,6 @@ async function handleBorrarNumero(chatId, telegramId, numero) {
   await sendMessage(chatId, "Gasto borrado:\n" + formatCat(gasto.categoria) + " - " + formatCOP(gasto.monto) + " | " + gasto.descripcion);
 }
 
-async function handleResetGastos(chatId, telegramId) {
-  await borrarTodosGastos(telegramId);
-  await sendMessage(chatId, "Todos tus gastos han sido borrados. Empiezas desde cero.");
-}
-
 async function handleCompartir(chatId, telegramId) {
   await sendMessage(chatId, "Generando resumen para compartir...");
   const [gastosMes, ingresos, gastosSemana] = await Promise.all([
@@ -275,8 +281,7 @@ async function handleAyuda(chatId) {
     "Gestion:\n" +
     "/gastos - ver ultimos 5 gastos\n" +
     "/borrar - borra el ultimo gasto\n" +
-    "borrar [numero] - borra gasto especifico\n" +
-    "/resetgastos - borra todos los gastos\n\n" +
+    "borrar [numero] - borra gasto especifico\n\n" +
     "Plan Pro:\n" +
     "/meta - configurar meta mensual con alertas\n" +
     "meta [monto] - ej: meta 800000\n" +
@@ -373,6 +378,14 @@ export default async function handler(req, res) {
   const userName = message.from.first_name || "Usuario";
   try {
     const user = await getOrCreateUser(telegramId, userName);
+    // Si el Pro vencio, avisar una vez
+    if (user.proVencido) {
+      await sendMessage(chatId,
+        "Tu Plan Pro ha vencido. Volviste al plan gratuito.
+
+Renueva con /pro - $15.000 COP/mes."
+      );
+    }
     const text = (message.text || "").replace(/@\w+/, "").trim();
     const textLower = text.toLowerCase();
 
@@ -385,7 +398,6 @@ export default async function handler(req, res) {
     else if (text === "/top") await handleTop(chatId, telegramId);
     else if (text === "/gastos") await handleGastos(chatId, telegramId);
     else if (text === "/borrar") await handleBorrar(chatId, telegramId);
-    else if (text === "/resetgastos") await handleResetGastos(chatId, telegramId);
     else if (text === "/compartir") await handleCompartir(chatId, telegramId);
     else if (text === "/meta") await handleMeta(chatId, telegramId, user, null);
     else if (text === "/pro") await handlePro(chatId, user);

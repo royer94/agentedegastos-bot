@@ -193,3 +193,47 @@ export async function guardarCategoriaPersonalizada(telegramId, gastoId, categor
   gasto.categoria = categoria;
   await redis("set", gastoId, JSON.stringify(gasto));
 }
+
+// ─── INGRESOS ─────────────────────────────────────────────────────────────────
+
+export async function obtenerUltimosIngresos(telegramId, limit) {
+  const keys = await redis("lrange", `ingresos:${telegramId}`, "0", String(limit - 1));
+  if (!keys || !Array.isArray(keys) || keys.length === 0) return [];
+  const items = [];
+  for (const key of keys) {
+    const raw = await redis("get", key);
+    if (!raw) continue;
+    const item = JSON.parse(raw);
+    item.id = key;
+    items.push(item);
+  }
+  return items;
+}
+
+export async function borrarIngreso(telegramId, ingresoKey) {
+  await redis("lrem", `ingresos:${telegramId}`, "1", ingresoKey);
+  await redis("del", ingresoKey);
+}
+
+// ─── CONTADOR DE COMANDOS (para mensajes de invitacion Pro) ───────────────────
+
+export async function incrementarComandos(telegramId) {
+  const key = `cmds:${telegramId}`;
+  const val = await redis("incr", key);
+  return parseInt(val);
+}
+
+export async function resetContadorComandos(telegramId) {
+  await redis("set", `cmds:${telegramId}`, "0");
+}
+
+// ─── GUIA VISTA ───────────────────────────────────────────────────────────────
+
+export async function marcarGuiaVista(telegramId) {
+  await redis("set", `guia:${telegramId}`, "1");
+}
+
+export async function guiaFueVista(telegramId) {
+  const val = await redis("get", `guia:${telegramId}`);
+  return val === "1";
+}

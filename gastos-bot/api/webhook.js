@@ -34,10 +34,7 @@ async function handleStart(chatId, user) {
   // Avisar si el Pro vencio
   if (user.proVencido) {
     await sendMessage(chatId,
-      "Tu Plan Pro ha vencido. Volviste al plan gratuito con 20 registros.
-
-" +
-      "Para renovar usa /pro - solo $15.000 COP/mes."
+      "Tu Plan Pro ha vencido. Volviste al plan gratuito con 20 registros.\n\nPara renovar usa /pro - solo $15.000 COP/mes."
     );
   }
   const saludo = user.isNew
@@ -381,9 +378,7 @@ export default async function handler(req, res) {
     // Si el Pro vencio, avisar una vez
     if (user.proVencido) {
       await sendMessage(chatId,
-        "Tu Plan Pro ha vencido. Volviste al plan gratuito.
-
-Renueva con /pro - $15.000 COP/mes."
+        "Tu Plan Pro ha vencido. Volviste al plan gratuito.\n\nRenueva con /pro - $15.000 COP/mes."
       );
     }
     const text = (message.text || "").replace(/@\w+/, "").trim();

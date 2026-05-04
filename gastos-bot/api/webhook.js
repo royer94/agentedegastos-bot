@@ -16,30 +16,46 @@ function formatCat(cat) {
   return m[cat] || cat;
 }
 
+// Palabras clave de INGRESO — todo lo demas se trata como gasto
+const PALABRAS_INGRESO = [
+  "ingrese ", "entre ", "recibi ", "me pagaron ", "me consignaron ",
+  "cai ", "me cayo ", "me transfirieron ", "deposite ", "me depositaron ",
+  "cobré ", "cobre ", "me abonaron ", "gane ", "gané "
+];
+
+function esIngreso(texto) {
+  const t = texto.toLowerCase();
+  return PALABRAS_INGRESO.some(p => t.startsWith(p));
+}
+
 // ─── COMANDOS ─────────────────────────────────────────────────────────────────
 
 async function handleStart(chatId, user) {
-  const saludo = user.isNew ? "Hola " + user.name + "! Soy tu asistente de gastos personales." : "Bienvenido de vuelta " + user.name + "!";
-  const estado = user.plan === "pro" ? "Plan Pro activo - registros ilimitados." : "Tienes " + user.credits + " registros gratuitos disponibles.";
+  const saludo = user.isNew
+    ? "Hola " + user.name + "! Soy tu asistente de gastos personales."
+    : "Bienvenido de vuelta " + user.name + "!";
+  const estado = user.plan === "pro"
+    ? "Plan Pro activo - registros ilimitados."
+    : "Tienes " + user.credits + " registros gratuitos disponibles.";
   await sendMessage(chatId,
     saludo + "\n\n" + estado + "\n\n" +
     "Registra gastos e ingresos en texto o audio:\n\n" +
-    "Gastos:\n- Gaste 15 mil en almuerzo\n- Pague cien lucas de taxi\n\n" +
-    "Ingresos:\n- Ingrese 2 millones de salario\n- Entre 500 mil de freelance\n\n" +
+    "Gastos:\n- Gaste 15 mil en almuerzo\n- Pague cien lucas de taxi\n- Compre mercado por 80 mil\n\n" +
+    "Ingresos:\n- Ingrese 2 millones de salario\n- Me pagaron 500 mil de freelance\n- Cai 300 mil de un cliente\n\n" +
     "Comandos:\n" +
     "/hoy - resumen de hoy\n" +
     "/semana - resumen semanal\n" +
+    "/vsanterior - esta semana vs la anterior\n" +
     "/mes - resumen del mes\n" +
     "/balance - ingresos vs gastos del mes\n" +
-    "/top - tus categorias con mas gasto\n" +
-    "/vsanterior - esta semana vs la anterior\n" +
-    "/gastos - ver y borrar gastos recientes\n" +
+    "/top - categorias con mas gasto\n" +
+    "/gastos - ver y gestionar gastos recientes\n" +
     "/borrar - borra el ultimo gasto\n" +
     "/resetgastos - borra todos los gastos\n" +
-    "/meta - meta de gasto mensual (Pro)\n" +
     "/compartir - resumen para compartir\n" +
-    "/ayuda - todos los comandos\n" +
-    "/pro - plan ilimitado"
+    "/meta - meta de gasto mensual (Pro)\n" +
+    "/pro - ver plan ilimitado\n" +
+    "/ayuda - todos los comandos"
   );
 }
 
@@ -57,7 +73,8 @@ async function handleSemana(chatId, telegramId) {
   const gastos = await obtenerResumenSemanal(telegramId);
   if (!gastos.length) return sendMessage(chatId, "No tienes gastos esta semana.");
   const resumen = await generarResumen(gastos, "esta semana");
-  const porCat = Object.entries(resumen.porCategoria).sort((a,b)=>b[1]-a[1]).map(([c,m])=>"- "+formatCat(c)+": "+formatCOP(m)).join("\n");
+  const porCat = Object.entries(resumen.porCategoria).sort((a,b)=>b[1]-a[1])
+    .map(([c,m]) => "- " + formatCat(c) + ": " + formatCOP(m)).join("\n");
   await sendMessage(chatId, "Resumen semanal\n\n" + resumen.texto + "\n\nPor categoria:\n" + porCat);
 }
 
@@ -73,21 +90,17 @@ async function handleVsAnterior(chatId, telegramId) {
   const pct = totalAnterior > 0 ? Math.round((diff / totalAnterior) * 100) : 0;
   const signo = diff > 0 ? "+" : "";
   const tendencia = diff > 0 ? "Gastaste mas que la semana pasada." : diff < 0 ? "Gastaste menos que la semana pasada. Bien!" : "Igual que la semana pasada.";
-
-  const catEsta = esta.reduce((acc, g) => { acc[g.categoria] = (acc[g.categoria]||0) + g.monto; return acc; }, {});
-  const catAnterior = anterior.reduce((acc, g) => { acc[g.categoria] = (acc[g.categoria]||0) + g.monto; return acc; }, {});
+  const catEsta = esta.reduce((acc,g) => { acc[g.categoria]=(acc[g.categoria]||0)+g.monto; return acc; }, {});
+  const catAnterior = anterior.reduce((acc,g) => { acc[g.categoria]=(acc[g.categoria]||0)+g.monto; return acc; }, {});
   const todasCat = [...new Set([...Object.keys(catEsta), ...Object.keys(catAnterior)])];
   const comparativo = todasCat.sort((a,b)=>(catEsta[b]||0)-(catEsta[a]||0)).slice(0,5)
-    .map(c => "- " + formatCat(c) + ": " + formatCOP(catEsta[c]||0) + " vs " + formatCOP(catAnterior[c]||0) + " semana pasada")
-    .join("\n");
-
+    .map(c => "- " + formatCat(c) + ": " + formatCOP(catEsta[c]||0) + " vs " + formatCOP(catAnterior[c]||0)).join("\n");
   await sendMessage(chatId,
     "Esta semana vs anterior\n\n" +
     "Esta semana: " + formatCOP(totalEsta) + " (" + esta.length + " gastos)\n" +
     "Semana anterior: " + formatCOP(totalAnterior) + " (" + anterior.length + " gastos)\n" +
     "Diferencia: " + signo + formatCOP(Math.abs(diff)) + " (" + signo + pct + "%)\n\n" +
-    tendencia + "\n\n" +
-    "Por categoria:\n" + (comparativo || "Sin datos suficientes.")
+    tendencia + "\n\nPor categoria:\n" + (comparativo || "Sin datos suficientes.")
   );
 }
 
@@ -112,9 +125,7 @@ async function handleBalance(chatId, telegramId) {
   const balance = totalIngresos - totalGastos;
   const signo = balance >= 0 ? "+" : "";
   const estado = balance >= 0 ? "Estas en positivo este mes!" : "Tus gastos superan tus ingresos este mes.";
-
   const detalleIngresos = ingresos.slice(0,5).map(i => "- " + formatCOP(i.monto) + " | " + i.descripcion).join("\n");
-
   await sendMessage(chatId,
     "Balance de " + new Date().toLocaleString("es-CO", { month: "long" }) + "\n\n" +
     "Ingresos: " + formatCOP(totalIngresos) + " (" + ingresos.length + " registros)\n" +
@@ -122,7 +133,7 @@ async function handleBalance(chatId, telegramId) {
     "Balance: " + signo + formatCOP(balance) + "\n\n" +
     estado +
     (detalleIngresos ? "\n\nDetalle ingresos:\n" + detalleIngresos : "") +
-    "\n\nPara registrar un ingreso escribe:\ningrese [monto] de [concepto]"
+    "\n\nPara registrar ingreso escribe:\ningrese [monto] de [concepto]"
   );
 }
 
@@ -130,18 +141,16 @@ async function handleTop(chatId, telegramId) {
   await sendMessage(chatId, "Analizando tus habitos de gasto...");
   const todos = await obtenerTodosGastos(telegramId);
   if (!todos.length) return sendMessage(chatId, "No tienes gastos registrados aun.");
-  const porCat = todos.reduce((acc, g) => { acc[g.categoria] = (acc[g.categoria]||0) + g.monto; return acc; }, {});
+  const porCat = todos.reduce((acc,g) => { acc[g.categoria]=(acc[g.categoria]||0)+g.monto; return acc; }, {});
   const total = todos.reduce((s,g) => s + g.monto, 0);
   const ranking = Object.entries(porCat).sort((a,b)=>b[1]-a[1])
     .map(([c,m], i) => {
       const pct = Math.round((m/total)*100);
-      const bar = "█".repeat(Math.round(pct/5)) + "░".repeat(20-Math.round(pct/5));
+      const filled = Math.round(pct/5);
+      const bar = "█".repeat(Math.min(filled,20)) + "░".repeat(Math.max(20-filled,0));
       return (i+1)+". "+formatCat(c)+": "+formatCOP(m)+" ("+pct+"%)\n   ["+bar+"]";
     }).join("\n");
-  await sendMessage(chatId,
-    "Tus categorias de mayor gasto (historico)\n\n" + ranking +
-    "\n\nTotal registrado: " + formatCOP(total) + " en " + todos.length + " transacciones"
-  );
+  await sendMessage(chatId, "Tus categorias de mayor gasto (historico)\n\n" + ranking + "\n\nTotal: " + formatCOP(total) + " en " + todos.length + " transacciones");
 }
 
 async function handleGastos(chatId, telegramId) {
@@ -190,9 +199,8 @@ async function handleCompartir(chatId, telegramId) {
   const totalSemana = gastosSemana.reduce((s,g) => s + g.monto, 0);
   const balance = totalIngresos - totalMes;
   const porCat = gastosMes.reduce((acc,g) => { acc[g.categoria]=(acc[g.categoria]||0)+g.monto; return acc; }, {});
-  const top3 = Object.entries(porCat).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([c,m])=>formatCat(c)+": "+formatCOP(m)).join(" | ");
+  const top3 = Object.entries(porCat).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([c,m]) => formatCat(c)+": "+formatCOP(m)).join(" | ");
   const mes = new Date().toLocaleString("es-CO", { month: "long", year: "numeric" });
-
   await sendMessage(chatId,
     "--- Mi resumen financiero ---\n" +
     mes.charAt(0).toUpperCase() + mes.slice(1) + "\n\n" +
@@ -204,12 +212,8 @@ async function handleCompartir(chatId, telegramId) {
   );
 }
 
-// ─── META (SOLO PRO) ──────────────────────────────────────────────────────────
-
 async function handleMeta(chatId, telegramId, user, monto) {
-  if (user.plan !== "pro") {
-    return sendMessage(chatId, "Las metas con alertas son exclusivas del Plan Pro.\n\nActiva tu plan con /pro");
-  }
+  if (user.plan !== "pro") return sendMessage(chatId, "Las metas con alertas son exclusivas del Plan Pro.\n\nActiva tu plan con /pro");
   if (!monto) {
     const meta = await obtenerMeta(telegramId);
     const gastosMes = await obtenerResumenMes(telegramId);
@@ -219,11 +223,7 @@ async function handleMeta(chatId, telegramId, user, monto) {
     const filled = Math.min(Math.round(pct / 10), 10);
     const bar = "█".repeat(filled) + "░".repeat(10 - filled);
     const estado = pct >= 100 ? "Has superado tu meta!" : pct >= 80 ? "Estas cerca del limite!" : pct >= 50 ? "Vas por la mitad." : "Vas bien!";
-    return sendMessage(chatId,
-      "Meta mensual: " + formatCOP(meta) + "\n\n" +
-      "Gastado: " + formatCOP(totalMes) + " (" + pct + "%)\n[" + bar + "]\n\n" +
-      estado + "\n\nPara cambiar: meta [monto]"
-    );
+    return sendMessage(chatId, "Meta mensual: " + formatCOP(meta) + "\n\nGastado: " + formatCOP(totalMes) + " (" + pct + "%)\n[" + bar + "]\n\n" + estado + "\n\nPara cambiar: meta [monto]");
   }
   const montoNum = parseInt(monto.replace(/[^0-9]/g, ""));
   if (isNaN(montoNum) || montoNum <= 0) return sendMessage(chatId, "Monto invalido. Ejemplo: meta 800000");
@@ -246,77 +246,120 @@ async function handlePro(chatId, user) {
   if (user.plan === "pro") return sendMessage(chatId, "Ya tienes Plan Pro activo! Registros ilimitados.");
   await sendMessage(chatId,
     "Plan Pro - $15.000 COP/mes\n\n" +
-    "- Registros ilimitados\n" +
-    "- Metas de ahorro con alertas al 50%, 80% y 100%\n\n" +
-    "El resto de funciones son gratis para todos!\n\n" +
+    "- Registros ilimitados (gratis = 20 registros)\n" +
+    "- Meta mensual con alertas automaticas al 50%, 80% y 100%\n\n" +
+    "Todas las demas funciones son gratis!\n\n" +
     "Como activarlo:\n" +
-    "1. Transfiere $15.000 a:\n" +
+    "1. Transfiere $15.000 COP a:\n" +
     "   Nequi: 3223208126\n" +
     "   Bre-B: @roraru9\n" +
     "2. Envia comprobante con: Pro [tu nombre]\n" +
-    "3. Te activamos en 1 hora"
+    "3. Te activamos en menos de 1 hora"
   );
 }
 
 async function handleAyuda(chatId) {
   await sendMessage(chatId,
     "Comandos disponibles:\n\n" +
-    "Registros:\n" +
-    "- Escribe o manda audio con tu gasto\n" +
-    "- ingrese [monto] de [concepto] — registrar ingreso\n\n" +
+    "Registros (texto o audio):\n" +
+    "- Cualquier gasto: gaste 15 mil en almuerzo\n" +
+    "- Ingresos: ingrese / me pagaron / cai / entre / recibi / gane\n\n" +
     "Reportes:\n" +
     "/hoy - gastos de hoy\n" +
     "/semana - ultimos 7 dias\n" +
     "/vsanterior - esta semana vs la anterior\n" +
     "/mes - mes actual\n" +
     "/balance - ingresos vs gastos del mes\n" +
-    "/top - tus categorias con mas gasto\n" +
+    "/top - ranking historico de categorias\n" +
     "/compartir - resumen para compartir\n\n" +
     "Gestion:\n" +
-    "/gastos - ver y borrar gastos recientes\n" +
+    "/gastos - ver ultimos 5 gastos\n" +
     "/borrar - borra el ultimo gasto\n" +
-    "borrar [numero] - borra un gasto especifico\n" +
+    "borrar [numero] - borra gasto especifico\n" +
     "/resetgastos - borra todos los gastos\n\n" +
-    "Pro:\n" +
+    "Plan Pro:\n" +
     "/meta - configurar meta mensual con alertas\n" +
-    "/pro - ver plan ilimitado"
+    "meta [monto] - ej: meta 800000\n" +
+    "/pro - activar plan ilimitado"
   );
 }
 
-// ─── PROCESAR GASTO / INGRESO ─────────────────────────────────────────────────
+// ─── PROCESAR INGRESO ─────────────────────────────────────────────────────────
+
+async function procesarIngreso(chatId, telegramId, texto) {
+  const Groq = (await import("groq-sdk")).default;
+  const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  const res = await client.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [{ role: "user", content: `El usuario dice: "${texto}". Extrae el ingreso y responde SOLO JSON sin texto adicional: {"esIngreso": true, "monto": numero en pesos colombianos, "descripcion": "descripcion corta"}` }],
+    temperature: 0.1, max_tokens: 100,
+  });
+  let ingreso;
+  try { ingreso = JSON.parse(res.choices[0].message.content.replace(/```json|```/g,"").trim()); }
+  catch { return sendMessage(chatId, "No entendi el ingreso. Ejemplo: ingrese 2 millones de salario"); }
+  if (!ingreso.monto) return sendMessage(chatId, "No entendi el monto. Ejemplo: me pagaron 500 mil de freelance");
+  await guardarIngreso(telegramId, { monto: ingreso.monto, descripcion: ingreso.descripcion, categoria: "Ingreso" });
+  await sendMessage(chatId, "Ingreso registrado\n\nIngreso: " + formatCOP(ingreso.monto) + "\n" + ingreso.descripcion + "\n\nUsa /balance para ver ingresos vs gastos del mes.");
+}
+
+// ─── PROCESAR GASTO ───────────────────────────────────────────────────────────
 
 async function procesarGasto(chatId, telegramId, texto, esAudio, user) {
   const credito = await descontarCredito(telegramId);
   if (!credito.ok) return sendMessage(chatId, "Se te acabaron los registros gratuitos.\n\nActiva el Plan Pro para registros ilimitados: /pro");
   const gasto = await extraerGasto(texto);
-  if (!gasto.esGasto) return sendMessage(chatId, "No entendi eso como un gasto.\n\nEjemplo: Gaste 20 mil en el bus\n\nPara ingresos: ingrese 500 mil de salario");
+  if (!gasto.esGasto) return sendMessage(chatId, "No entendi eso como un gasto.\n\nEjemplos:\n- Gaste 20 mil en el bus\n- Pague 50 lucas en el super\n- Compre tinto 3 mil\n\nPara ingresos escribe: ingrese [monto] de [concepto]");
   await guardarGasto(telegramId, { monto: gasto.monto, descripcion: gasto.descripcion, categoria: gasto.categoria, nota: gasto.nota||"", fuenteTexto: esAudio?"audio":"texto", textoOriginal: texto });
   const restantes = credito.credits === "inf" ? "ilimitados" : credito.credits;
   await sendMessage(chatId,
-    "Gasto registrado\n\n" + formatCat(gasto.categoria) + " - " + formatCOP(gasto.monto) + "\n" + gasto.descripcion +
-    "\n\nRegistros restantes: " + restantes
+    "Gasto registrado\n\n" + formatCat(gasto.categoria) + " - " + formatCOP(gasto.monto) + "\n" +
+    gasto.descripcion + "\n\nRegistros restantes: " + restantes
   );
   if (credito.credits !== "inf" && credito.credits === 3) await sendMessage(chatId, "Te quedan solo 3 registros gratuitos. Activa el Plan Pro: /pro");
   if (user.plan === "pro") await verificarAlertas(chatId, telegramId);
 }
 
-async function procesarIngreso(chatId, telegramId, texto) {
-  // Extraer monto y descripcion del ingreso
-  const prompt = `El usuario dice: "${texto}". Extrae el ingreso y responde SOLO JSON: {"esIngreso": true/false, "monto": numero, "descripcion": "descripcion corta"}`;
-  const groq = (await import("groq-sdk")).default;
-  const client = new groq({ apiKey: process.env.GROQ_API_KEY });
+
+// ─── DETECCIÓN DE INTENCIÓN EN AUDIO ─────────────────────────────────────────
+
+async function detectarIntencion(texto) {
+  const Groq = (await import("groq-sdk")).default;
+  const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
   const res = await client.chat.completions.create({
     model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.1, max_tokens: 100,
+    messages: [{ role: "user", content: `El usuario dice por voz: "${texto}"
+
+Determina si es un COMANDO de consulta o un REGISTRO de gasto/ingreso.
+Responde SOLO JSON sin texto adicional:
+
+{"tipo": "comando", "comando": "/hoy"} — si pregunta por gastos de hoy
+{"tipo": "comando", "comando": "/semana"} — si pregunta por gastos de la semana
+{"tipo": "comando", "comando": "/mes"} — si pregunta por gastos del mes
+{"tipo": "comando", "comando": "/balance"} — si pregunta por balance, ingresos vs gastos
+{"tipo": "comando", "comando": "/vsanterior"} — si compara semanas
+{"tipo": "comando", "comando": "/top"} — si pregunta en que gasta mas
+{"tipo": "comando", "comando": "/compartir"} — si quiere compartir resumen
+{"tipo": "registro"} — si está registrando un gasto o ingreso
+
+Ejemplos:
+- "cuanto gaste hoy" → comando /hoy
+- "gastos de hoy" → comando /hoy
+- "como voy esta semana" → comando /semana
+- "resumen semanal" → comando /semana
+- "cuanto llevo este mes" → comando /mes
+- "como va mi balance" → comando /balance
+- "en que gasto mas" → comando /top
+- "gaste 15 mil en almuerzo" → registro
+- "pague el bus 2500" → registro
+- "me pagaron 500 mil" → registro` }],
+    temperature: 0.1,
+    max_tokens: 60,
   });
-  let ingreso;
   try {
-    ingreso = JSON.parse(res.choices[0].message.content.replace(/```json|```/g,"").trim());
-  } catch { return sendMessage(chatId, "No entendi el ingreso. Ejemplo: ingrese 2 millones de salario"); }
-  if (!ingreso.esIngreso || !ingreso.monto) return sendMessage(chatId, "No entendi el ingreso. Ejemplo: ingrese 500 mil de freelance");
-  await guardarIngreso(telegramId, { monto: ingreso.monto, descripcion: ingreso.descripcion, categoria: "Ingreso" });
-  await sendMessage(chatId, "Ingreso registrado\n\nIngreso: " + formatCOP(ingreso.monto) + "\n" + ingreso.descripcion + "\n\nUsa /balance para ver ingresos vs gastos del mes.");
+    return JSON.parse(res.choices[0].message.content.replace(/```json|```/g,"").trim());
+  } catch {
+    return { tipo: "registro" };
+  }
 }
 
 // ─── HANDLER PRINCIPAL ────────────────────────────────────────────────────────
@@ -350,7 +393,7 @@ export default async function handler(req, res) {
     else if (textLower.startsWith("meta ")) await handleMeta(chatId, telegramId, user, text.split(" ").slice(1).join(" "));
     else if (textLower.startsWith("borrar ")) await handleBorrarNumero(chatId, telegramId, text.split(" ")[1]);
     else if (textLower.startsWith("pro ")) await sendMessage(chatId, "Comprobante recibido. Te activamos en menos de 1 hora. Gracias!");
-    else if (textLower.startsWith("ingrese ") || textLower.startsWith("entre ") || textLower.startsWith("recibi ") || textLower.startsWith("me pagaron ") || textLower.startsWith("me consignaron ") || textLower.startsWith("cai ") || textLower.startsWith("me cayo ")) await procesarIngreso(chatId, telegramId, text);
+    else if (esIngreso(text)) await procesarIngreso(chatId, telegramId, text);
     else if (message.voice || message.audio) {
       await sendMessage(chatId, "Transcribiendo tu audio...");
       const fileId = message.voice?.file_id || message.audio?.file_id;
@@ -359,8 +402,19 @@ export default async function handler(req, res) {
       const transcripcion = await transcribirAudio(audioBuffer);
       if (!transcripcion || transcripcion.trim().length < 3) return res.status(200).send("OK");
       await sendMessage(chatId, "Escuche: " + transcripcion);
-      const t = transcripcion.toLowerCase();
-      if (t.startsWith("ingrese ") || t.startsWith("entre ") || t.startsWith("recibi ") || t.startsWith("me pagaron ") || t.startsWith("me consignaron ") || t.startsWith("cai ") || t.startsWith("me cayo ")) {
+      // Detectar si es comando o registro
+      const intencion = await detectarIntencion(transcripcion);
+      if (intencion.tipo === "comando") {
+        const cmd = intencion.comando;
+        if (cmd === "/hoy") await handleHoy(chatId, telegramId);
+        else if (cmd === "/semana") await handleSemana(chatId, telegramId);
+        else if (cmd === "/vsanterior") await handleVsAnterior(chatId, telegramId);
+        else if (cmd === "/mes") await handleMes(chatId, telegramId);
+        else if (cmd === "/balance") await handleBalance(chatId, telegramId);
+        else if (cmd === "/top") await handleTop(chatId, telegramId);
+        else if (cmd === "/compartir") await handleCompartir(chatId, telegramId);
+        else await procesarGasto(chatId, telegramId, transcripcion, true, user);
+      } else if (esIngreso(transcripcion)) {
         await procesarIngreso(chatId, telegramId, transcripcion);
       } else {
         await procesarGasto(chatId, telegramId, transcripcion, true, user);

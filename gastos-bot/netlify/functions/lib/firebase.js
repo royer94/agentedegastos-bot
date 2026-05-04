@@ -28,7 +28,18 @@ export async function getOrCreateUser(telegramId, name) {
     await redis("set", key, JSON.stringify(newUser));
     return { ...newUser, isNew: true };
   }
-  return { ...JSON.parse(existing), isNew: false };
+  const data = JSON.parse(existing);
+  // Verificar si el Plan Pro expiro
+  if (data.plan === "pro" && data.proExpira) {
+    const expira = new Date(data.proExpira);
+    if (new Date() > expira) {
+      // Plan vencido — bajar a free automaticamente
+      const updated = { ...data, plan: "free" };
+      await redis("set", key, JSON.stringify(updated));
+      return { ...updated, isNew: false, proVencido: true };
+    }
+  }
+  return { ...data, isNew: false };
 }
 
 export async function descontarCredito(telegramId) {
@@ -46,7 +57,10 @@ export async function activarPro(telegramId) {
   const key = `user:${telegramId}`;
   const existing = await redis("get", key);
   const data = JSON.parse(existing);
-  await redis("set", key, JSON.stringify({ ...data, plan: "pro" }));
+  // Calcular fecha de expiracion: hoy + 31 dias
+  const expira = new Date();
+  expira.setDate(expira.getDate() + 31);
+  await redis("set", key, JSON.stringify({ ...data, plan: "pro", proExpira: expira.toISOString() }));
 }
 
 // ─── GASTOS ───────────────────────────────────────────────────────────────────

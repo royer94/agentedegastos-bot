@@ -1,6 +1,4 @@
 // netlify/functions/lib/firebase.js
-// Usa Upstash Redis REST API — simple, rapido, sin SDK pesado
-
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || "https://distinct-parakeet-114368.upstash.io";
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "gQAAAAAAAb7AAAIgcDFkZjY2M2I0NmUwYmI0YTc2YTA0NzA0ZWZkMGJiZGZlZg";
 
@@ -29,7 +27,6 @@ export async function getOrCreateUser(telegramId, name) {
     return { ...newUser, isNew: true };
   }
   const data = JSON.parse(existing);
-  // Verificar si el Plan Pro expiro
   if (data.plan === "pro" && data.proExpira) {
     const expira = new Date(data.proExpira);
     if (new Date() > expira) {
@@ -151,6 +148,56 @@ export async function borrarGasto(telegramId, gastoKey) {
   await redis("del", gastoKey);
 }
 
+// ─── INGRESOS (solo Pro) ──────────────────────────────────────────────────────
+
+export async function guardarIngreso(telegramId, ingreso) {
+  const fecha = new Date().toISOString();
+  const id = `ingreso:${telegramId}:${Date.now()}`;
+  const doc = { ...ingreso, telegramId: String(telegramId), fecha };
+  await redis("set", id, JSON.stringify(doc));
+  await redis("lpush", `ingresos:${telegramId}`, id);
+  await redis("ltrim", `ingresos:${telegramId}`, "0", "499");
+  return doc;
+}
+
+async function obtenerIngresosDesde(telegramId, desde) {
+  const keys = await redis("lrange", `ingresos:${telegramId}`, "0", "99");
+  if (!keys || !Array.isArray(keys) || keys.length === 0) return [];
+  const items = [];
+  for (const key of keys) {
+    const raw = await redis("get", key);
+    if (!raw) continue;
+    const item = JSON.parse(raw);
+    item.id = key;
+    if (item.fecha >= desde) items.push(item);
+  }
+  return items;
+}
+
+export async function obtenerIngresosMes(telegramId) {
+  const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
+  return obtenerIngresosDesde(telegramId, inicioMes.toISOString());
+}
+
+export async function obtenerUltimosIngresos(telegramId, limit) {
+  const keys = await redis("lrange", `ingresos:${telegramId}`, "0", String(limit - 1));
+  if (!keys || !Array.isArray(keys) || keys.length === 0) return [];
+  const ingresos = [];
+  for (const key of keys) {
+    const raw = await redis("get", key);
+    if (!raw) continue;
+    const ingreso = JSON.parse(raw);
+    ingreso.id = key;
+    ingresos.push(ingreso);
+  }
+  return ingresos;
+}
+
+export async function borrarIngreso(telegramId, ingresoKey) {
+  await redis("lrem", `ingresos:${telegramId}`, "1", ingresoKey);
+  await redis("del", ingresoKey);
+}
+
 // ─── META ─────────────────────────────────────────────────────────────────────
 
 export async function guardarMeta(telegramId, monto) {
@@ -163,20 +210,13 @@ export async function obtenerMeta(telegramId) {
   return parseInt(val);
 }
 
-// ─── CONTADOR DE COMANDOS ─────────────────────────────────────────────────────
+// ─── CONTADOR Y GUIA ─────────────────────────────────────────────────────────
 
 export async function incrementarComandos(telegramId) {
   const val = await redis("incr", `cmds:${telegramId}`);
   return parseInt(val);
 }
 
-// ─── GUIA ─────────────────────────────────────────────────────────────────────
-
 export async function marcarGuiaVista(telegramId) {
   await redis("set", `guia:${telegramId}`, "1");
-}
-
-export async function guiaFueVista(telegramId) {
-  const val = await redis("get", `guia:${telegramId}`);
-  return val === "1";
 }

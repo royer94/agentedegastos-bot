@@ -1,31 +1,38 @@
 import { sendMessage, getFile, downloadFile } from "../netlify/functions/lib/telegram.js";
 import { transcribirAudio, extraerGasto, generarResumen } from "../netlify/functions/lib/ai.js";
 import {
-  getOrCreateUser, descontarCredito, guardarGasto, guardarIngreso,
+  getOrCreateUser, descontarCredito, guardarGasto,
   obtenerResumenHoy, obtenerResumenSemanal, obtenerResumenSemanaPasada,
-  obtenerResumenMes, obtenerIngresosMes, obtenerTodosGastos,
+  obtenerResumenMes, obtenerTodosGastos,
   obtenerUltimosGastos, borrarGasto,
-  obtenerUltimosIngresos, borrarIngreso,
   obtenerMeta, guardarMeta,
-  incrementarComandos, resetContadorComandos,
-  marcarGuiaVista, guiaFueVista,
+  incrementarComandos, marcarGuiaVista,
 } from "../netlify/functions/lib/firebase.js";
 
 function formatCOP(m) { return "$" + Number(m).toLocaleString("es-CO") + " COP"; }
-function formatCat(cat) {
-  const m = { Comida:"Comida", Transporte:"Transporte", Salud:"Salud",
-    Entretenimiento:"Entretenimiento", Ropa:"Ropa", Hogar:"Hogar",
-    Trabajo:"Trabajo", Ahorro:"Ahorro", Ingreso:"Ingreso", Otro:"Otro" };
-  return m[cat] || cat;
-}
+
+const CATEGORIAS = [
+  "Comida", "Bebidas alcoholicas", "Cafe",
+  "Transporte", "Vehiculo", "Parqueadero",
+  "Salud", "Belleza", "Bienestar",
+  "Hogar", "Reparaciones", "Electrodomesticos", "Decoracion",
+  "Educacion", "Hijos", "Mascotas", "Adultos mayores",
+  "Ahorro", "Deudas", "Seguros", "Inversiones",
+  "Entretenimiento", "Viajes", "Deportes", "Suscripciones",
+  "Trabajo", "Publicidad", "Tecnologia", "Proveedores",
+  "Ropa", "Accesorios",
+  "Regalos", "Donaciones", "Impuestos", "Multas", "Otro"
+];
+
+function formatCat(cat) { return cat || "Otro"; }
 
 // ─── MENSAJES DE INVITACION PRO ───────────────────────────────────────────────
 
 const MENSAJES_PRO = [
   "Con el Plan Pro registras gastos ilimitados y configuras una meta mensual con alertas al 50%, 80% y 100%. Solo $15.000 COP/mes. Usa /pro para ver las opciones.",
-  "Sabias que con el Plan Pro puedes configurar tu presupuesto mensual y el bot te avisa cuando te estas acercando al limite? Usa /pro para conocer los planes.",
+  "Sabias que con el Plan Pro puedes configurar tu presupuesto mensual y el bot te avisa cuando te acercas al limite? Mira /pro.",
   "El Plan Pro tiene planes de 3, 6 y 12 meses con descuento de hasta 20%. Mira /pro.",
-  "Con el Plan Pro los reportes por voz quedan habilitados — solo di cuanto gaste hoy y el bot responde. Desde $15.000 COP/mes en /pro.",
+  "Con el Plan Pro los reportes por voz quedan habilitados. Desde $15.000 COP/mes en /pro.",
 ];
 
 async function verificarMensajePro(chatId, telegramId, user) {
@@ -41,12 +48,11 @@ async function verificarMensajePro(chatId, telegramId, user) {
 
 async function enviarGuia(chatId) {
   const pasos = [
-    "Bienvenido a Agente de Gastos! Te explico como usarme en unos pasos rapidos. (1/6)",
-    "REGISTRAR GASTOS (2/6)\n\nEscribe o manda un audio con lo que gastaste:\n- Gaste 15 mil en almuerzo\n- Pague cien lucas de taxi\n- Compre mercado por 80 mil\n\nYo categorizo automaticamente.",
-    "REGISTRAR INGRESOS (3/6)\n\nHabla o escribe naturalmente:\n- Me pagaron 500 mil de freelance\n- Me llego la quincena, dos millones\n- Vendi el celular por 300 mil\n- Me devolvieron 50 mil\n\nEl bot detecta automaticamente si es un ingreso.",
-    "CONSULTAR REPORTES (4/6)\n\nUsa estos comandos:\n/hoy - gastos de hoy\n/semana - ultimos 7 dias\n/vsanterior - esta semana vs la anterior\n/mes - mes actual\n/balance - ingresos vs gastos\n/top - en que gastas mas\n/compartir - resumen para compartir",
-    "GESTIONAR MOVIMIENTOS (5/6)\n\nGastos:\n/gastos - ver ultimos 5 gastos\n/borrargasto - borra el ultimo gasto\n\nIngresos:\n/ingresos - ver ultimos 5 ingresos\n/borraringreso - borra el ultimo ingreso",
-    "PLAN PRO (6/6)\n\nEl plan gratuito incluye 20 registros y todos los comandos.\n\nCon el Plan Pro:\n- Registros ilimitados\n- Meta mensual con alertas\n- Reportes por voz\n\nUsa /pro para ver planes desde $15.000 COP/mes.\n\nYa puedes empezar! Dime en que gastaste hoy.",
+    "Bienvenido a Agente de Gastos! Te explico como usarme en unos pasos rapidos. (1/5)",
+    "REGISTRAR GASTOS (2/5)\n\nEscribe o manda un audio con lo que gastaste:\n- Gaste 15 mil en almuerzo\n- Pague cien lucas de taxi\n- Compre mercado por 80 mil\n\nYo categorizo automaticamente en 36 categorias.",
+    "CONSULTAR REPORTES (3/5)\n\nUsa estos comandos:\n/hoy - gastos de hoy\n/semana - ultimos 7 dias\n/vsanterior - esta semana vs la anterior\n/mes - mes actual\n/top - en que gastas mas\n/compartir - resumen para compartir",
+    "GESTIONAR GASTOS (4/5)\n\n/gastos - ver ultimos 5 gastos\n/borrargasto - borra el ultimo gasto\n\nPara borrar un gasto especifico:\nPrimero usa /gastos para ver la lista\nLuego usa /borrargasto",
+    "PLAN PRO (5/5)\n\nEl plan gratuito incluye 20 registros y todos los comandos.\n\nCon el Plan Pro:\n- Registros ilimitados\n- Meta mensual con alertas al 50%, 80% y 100%\n- Reportes por voz\n\nUsa /pro para ver planes desde $15.000 COP/mes.\n\nYa puedes empezar! Dime en que gastaste hoy.",
   ];
   for (const paso of pasos) {
     await sendMessage(chatId, paso);
@@ -54,8 +60,7 @@ async function enviarGuia(chatId) {
   }
 }
 
-// ─── CLASIFICAR AUDIO CON IA ─────────────────────────────────────────────────
-// Determina si el audio es: ingreso, gasto, o comando de reporte
+// ─── CLASIFICAR AUDIO CON IA ──────────────────────────────────────────────────
 
 async function clasificarAudio(texto) {
   const Groq = (await import("groq-sdk")).default;
@@ -64,18 +69,15 @@ async function clasificarAudio(texto) {
     model: "llama-3.3-70b-versatile",
     messages: [{ role: "user", content: `El usuario dice por audio: "${texto}"
 
-Clasifica en una de estas tres categorias y responde SOLO JSON sin texto adicional:
+Clasifica en una de estas dos categorias y responde SOLO JSON:
 
-1. Si es un INGRESO (recibio dinero): {"tipo": "ingreso", "monto": numero, "descripcion": "descripcion corta"}
-   Ejemplos de ingresos: me pagaron, me llego, vendi, me devolvieron, recibi, me consignaron, entre, cai, gane, cobre, me transfirieron, me dieron, me abonaron, quincena, salario, freelance, negocio, reembolso
+1. Si es un GASTO (gasto dinero): {"tipo": "gasto"}
 
-2. Si es un GASTO (gasto dinero): {"tipo": "gasto"}
-
-3. Si es un COMANDO de consulta: {"tipo": "comando", "comando": "/hoy"}
-   Comandos posibles: /hoy /semana /mes /balance /vsanterior /top /compartir
-   Ejemplos: cuanto gaste hoy, como voy esta semana, cuanto llevo este mes, como va mi balance, en que gasto mas, compara semanas, compartir resumen` }],
+2. Si es un COMANDO de consulta: {"tipo": "comando", "comando": "/hoy"}
+   Comandos posibles: /hoy /semana /mes /vsanterior /top /compartir
+   Ejemplos: cuanto gaste hoy, como voy esta semana, cuanto llevo este mes, en que gasto mas, compara semanas, compartir resumen` }],
     temperature: 0.1,
-    max_tokens: 80,
+    max_tokens: 60,
   });
   try {
     return JSON.parse(res.choices[0].message.content.replace(/```json|```/g,"").trim());
@@ -161,28 +163,6 @@ async function handleMes(chatId, telegramId) {
   await sendMessage(chatId, "Resumen del mes\n\n" + resumen.texto + "\n\nTop 3 categorias:\n" + top3 + "\n\nTotal: " + resumen.cantidad + " transacciones");
 }
 
-async function handleBalance(chatId, telegramId) {
-  await sendMessage(chatId, "Calculando tu balance del mes...");
-  const [gastos, ingresos] = await Promise.all([
-    obtenerResumenMes(telegramId),
-    obtenerIngresosMes(telegramId),
-  ]);
-  const totalGastos = gastos.reduce((s,g) => s + g.monto, 0);
-  const totalIngresos = ingresos.reduce((s,i) => s + i.monto, 0);
-  const balance = totalIngresos - totalGastos;
-  const signo = balance >= 0 ? "+" : "";
-  const estado = balance >= 0 ? "Estas en positivo este mes!" : "Tus gastos superan tus ingresos este mes.";
-  const detalleIngresos = ingresos.slice(0,5).map(i => "- " + formatCOP(i.monto) + " | " + i.descripcion).join("\n");
-  await sendMessage(chatId,
-    "Balance de " + new Date().toLocaleString("es-CO", { month: "long" }) + "\n\n" +
-    "Ingresos: " + formatCOP(totalIngresos) + " (" + ingresos.length + " registros)\n" +
-    "Gastos: " + formatCOP(totalGastos) + " (" + gastos.length + " registros)\n" +
-    "Balance: " + signo + formatCOP(balance) + "\n\n" +
-    estado +
-    (detalleIngresos ? "\n\nDetalle ingresos:\n" + detalleIngresos : "")
-  );
-}
-
 async function handleTop(chatId, telegramId) {
   await sendMessage(chatId, "Analizando tus habitos de gasto...");
   const todos = await obtenerTodosGastos(telegramId);
@@ -199,7 +179,6 @@ async function handleTop(chatId, telegramId) {
   await sendMessage(chatId, "Tus categorias de mayor gasto\n\n" + ranking + "\n\nTotal: " + formatCOP(total) + " en " + todos.length + " transacciones");
 }
 
-// FIX: /gastos muestra SOLO gastos, no ingresos
 async function handleGastos(chatId, telegramId) {
   const gastos = await obtenerUltimosGastos(telegramId, 5);
   if (!gastos.length) return sendMessage(chatId, "No tienes gastos registrados aun.");
@@ -212,7 +191,6 @@ async function handleGastos(chatId, telegramId) {
   await sendMessage(chatId, msg);
 }
 
-// FIX: comando renombrado a /borrargasto
 async function handleBorrarGasto(chatId, telegramId) {
   const gastos = await obtenerUltimosGastos(telegramId, 1);
   if (!gastos.length) return sendMessage(chatId, "No tienes gastos para borrar.");
@@ -221,39 +199,14 @@ async function handleBorrarGasto(chatId, telegramId) {
   await sendMessage(chatId, "Gasto borrado:\n" + formatCat(ultimo.categoria) + " - " + formatCOP(ultimo.monto) + " | " + ultimo.descripcion);
 }
 
-// /ingresos muestra SOLO ingresos
-async function handleIngresos(chatId, telegramId) {
-  const ingresos = await obtenerUltimosIngresos(telegramId, 5);
-  if (!ingresos.length) return sendMessage(chatId, "No tienes ingresos registrados aun.");
-  let msg = "Ultimos 5 ingresos:\n\n";
-  ingresos.forEach((ing, i) => {
-    const fecha = new Date(ing.fecha).toLocaleDateString("es-CO");
-    msg += (i+1) + ". " + formatCOP(ing.monto) + " | " + ing.descripcion + " (" + fecha + ")\n";
-  });
-  msg += "\nPara borrar el ultimo: /borraringreso";
-  await sendMessage(chatId, msg);
-}
-
-// FIX: comando renombrado a /borraringreso
-async function handleBorrarIngreso(chatId, telegramId) {
-  const ingresos = await obtenerUltimosIngresos(telegramId, 1);
-  if (!ingresos.length) return sendMessage(chatId, "No tienes ingresos para borrar.");
-  const ultimo = ingresos[0];
-  await borrarIngreso(telegramId, ultimo.id);
-  await sendMessage(chatId, "Ingreso borrado:\n" + formatCOP(ultimo.monto) + " | " + ultimo.descripcion);
-}
-
 async function handleCompartir(chatId, telegramId) {
   await sendMessage(chatId, "Generando resumen para compartir...");
-  const [gastosMes, ingresos, gastosSemana] = await Promise.all([
+  const [gastosMes, gastosSemana] = await Promise.all([
     obtenerResumenMes(telegramId),
-    obtenerIngresosMes(telegramId),
     obtenerResumenSemanal(telegramId),
   ]);
   const totalMes = gastosMes.reduce((s,g) => s + g.monto, 0);
-  const totalIngresos = ingresos.reduce((s,i) => s + i.monto, 0);
   const totalSemana = gastosSemana.reduce((s,g) => s + g.monto, 0);
-  const balance = totalIngresos - totalMes;
   const porCat = gastosMes.reduce((acc,g) => { acc[g.categoria]=(acc[g.categoria]||0)+g.monto; return acc; }, {});
   const top3 = Object.entries(porCat).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([c,m]) => formatCat(c)+": "+formatCOP(m)).join(" | ");
   const mes = new Date().toLocaleString("es-CO", { month: "long", year: "numeric" });
@@ -262,7 +215,6 @@ async function handleCompartir(chatId, telegramId) {
     mes.charAt(0).toUpperCase() + mes.slice(1) + "\n\n" +
     "Gastos del mes: " + formatCOP(totalMes) + "\n" +
     "Gastos esta semana: " + formatCOP(totalSemana) + "\n" +
-    (totalIngresos > 0 ? "Ingresos: " + formatCOP(totalIngresos) + "\nBalance: " + formatCOP(balance) + "\n" : "") +
     "\nTop categorias:\n" + (top3 || "Sin datos") + "\n\n" +
     "Registrado con @Agentedegastos_bot"
   );
@@ -327,24 +279,19 @@ async function handleAyuda(chatId) {
   await sendMessage(chatId,
     "Comandos disponibles:\n\n" +
     "Registros (texto o audio):\n" +
-    "- Cualquier gasto: gaste 15 mil en almuerzo\n" +
-    "- Ingresos: habla o escribe naturalmente\n\n" +
+    "- Cualquier gasto: gaste 15 mil en almuerzo\n\n" +
     "Reportes (texto free y Pro / voz solo Pro):\n" +
     "/hoy - gastos de hoy\n" +
     "/semana - ultimos 7 dias\n" +
     "/vsanterior - esta semana vs la anterior\n" +
     "/mes - mes actual\n" +
-    "/balance - ingresos vs gastos\n" +
-    "/top - ranking historico\n" +
+    "/top - ranking historico de categorias\n" +
     "/compartir - resumen para compartir\n\n" +
     "Gestion gastos:\n" +
     "/gastos - ver ultimos 5 gastos\n" +
     "/borrargasto - borra el ultimo gasto\n\n" +
-    "Gestion ingresos:\n" +
-    "/ingresos - ver ultimos 5 ingresos\n" +
-    "/borraringreso - borra el ultimo ingreso\n\n" +
     "Plan Pro:\n" +
-    "/meta - configurar meta mensual\n" +
+    "/meta - configurar meta mensual con alertas\n" +
     "meta [monto] - ej: meta 800000\n" +
     "/pro - ver planes y precios\n\n" +
     "/guia - tutorial completo\n" +
@@ -352,39 +299,91 @@ async function handleAyuda(chatId) {
   );
 }
 
-// ─── PROCESAR INGRESO ─────────────────────────────────────────────────────────
-
-// FIX: mensaje corregido a "Ingreso registrado"
-async function procesarIngresoDesdeClasificacion(chatId, telegramId, monto, descripcion) {
-  await guardarIngreso(telegramId, { monto, descripcion, categoria: "Ingreso" });
-  await sendMessage(chatId, "Ingreso registrado\n\nIngreso: " + formatCOP(monto) + "\n" + descripcion + "\n\nUsa /balance para ver ingresos vs gastos.");
-}
-
-async function procesarIngresoTexto(chatId, telegramId, texto) {
-  const Groq = (await import("groq-sdk")).default;
-  const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  const res = await client.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: `El usuario dice: "${texto}". Extrae el ingreso. Responde SOLO JSON: {"monto": numero en pesos colombianos, "descripcion": "descripcion corta"}` }],
-    temperature: 0.1, max_tokens: 80,
-  });
-  let ingreso;
-  try { ingreso = JSON.parse(res.choices[0].message.content.replace(/```json|```/g,"").trim()); }
-  catch { return sendMessage(chatId, "No entendi el ingreso. Ejemplo: me pagaron 2 millones de salario"); }
-  if (!ingreso.monto) return sendMessage(chatId, "No entendi el monto. Intenta de nuevo.");
-  await procesarIngresoDesdeClasificacion(chatId, telegramId, ingreso.monto, ingreso.descripcion);
-}
-
 // ─── PROCESAR GASTO ───────────────────────────────────────────────────────────
 
 async function procesarGasto(chatId, telegramId, texto, esAudio, user) {
   const credito = await descontarCredito(telegramId);
   if (!credito.ok) return sendMessage(chatId, "Se te acabaron los registros gratuitos.\n\nActiva el Plan Pro: /pro");
-  const gasto = await extraerGasto(texto);
+
+  // Prompt con todas las categorias disponibles
+  const categoriasStr = CATEGORIAS.join(", ");
+  const Groq = (await import("groq-sdk")).default;
+  const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  const res = await client.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [{ role: "user", content: `Eres un asistente financiero colombiano. El usuario dice: "${texto}"
+
+Extrae el gasto y responde SOLO JSON sin texto adicional:
+{"esGasto": true/false, "monto": numero en pesos colombianos, "descripcion": "descripcion corta", "categoria": "categoria exacta de la lista", "nota": "nota opcional"}
+
+Categorias disponibles (elige la mas apropiada):
+${categoriasStr}
+
+Ejemplos de asignacion:
+- "almuerzo, tinto, domicilio, mercado" → Comida
+- "cerveza, ron, trago, bar" → Bebidas alcoholicas
+- "taxi, bus, uber, gasolina, metro" → Transporte
+- "SOAT, revision tecnica, aceite, llantas" → Vehiculo
+- "parqueadero, parqueo" → Parqueadero
+- "medico, clinica, farmacia, medicamento" → Salud
+- "gym, gimnasio" → Salud
+- "peluqueria, manicure, cosmeticos, barberia" → Belleza
+- "spa, masaje" → Bienestar
+- "arriendo, servicios, agua, luz, gas" → Hogar
+- "plomero, electricista, pintura" → Reparaciones
+- "nevera, lavadora, televisor" → Electrodomesticos
+- "mueble, cuadro, planta" → Decoracion
+- "colegio, universidad, curso, libro" → Educacion
+- "pañal, juguete, ropa niño" → Hijos
+- "veterinario, comida mascota, perro, gato" → Mascotas
+- "cuidado abuela, enfermera adulto mayor" → Adultos mayores
+- "ahorro, fondo, CDT" → Ahorro
+- "cuota credito, prestamo, deuda" → Deudas
+- "seguro vida, seguro carro, seguro hogar" → Seguros
+- "acciones, crypto, inversion" → Inversiones
+- "cine, concierto, teatro, restaurante elegante" → Entretenimiento
+- "tiquete, hotel, paseo, tour" → Viajes
+- "futbol, tenis, natacion, equipos deportivos" → Deportes
+- "netflix, spotify, amazon, app" → Suscripciones
+- "papeleria, herramienta, materiales trabajo" → Trabajo
+- "pauta, diseño, marketing, publicidad" → Publicidad
+- "computador, celular, software, internet" → Tecnologia
+- "materia prima, inventario, proveedor" → Proveedores
+- "ropa, zapatos, vestido, camisa" → Ropa
+- "bolso, reloj, joya, accesorio" → Accesorios
+- "regalo, detalle, flores" → Regalos
+- "donacion, iglesia, limosna, fundacion" → Donaciones
+- "impuesto predial, renta, iva" → Impuestos
+- "multa transito, comparendo" → Multas
+
+Si no es un gasto retorna: {"esGasto": false}` }],
+    temperature: 0.1,
+    max_tokens: 150,
+  });
+
+  let gasto;
+  try {
+    gasto = JSON.parse(res.choices[0].message.content.replace(/```json|```/g,"").trim());
+  } catch {
+    gasto = { esGasto: false };
+  }
+
   if (!gasto.esGasto) return sendMessage(chatId, "No entendi eso como un gasto.\n\nEjemplos:\n- Gaste 20 mil en el bus\n- Pague 50 lucas en el super");
-  await guardarGasto(telegramId, { monto: gasto.monto, descripcion: gasto.descripcion, categoria: gasto.categoria, nota: gasto.nota||"", fuenteTexto: esAudio?"audio":"texto", textoOriginal: texto });
+
+  await guardarGasto(telegramId, {
+    monto: gasto.monto,
+    descripcion: gasto.descripcion,
+    categoria: gasto.categoria,
+    nota: gasto.nota || "",
+    fuenteTexto: esAudio ? "audio" : "texto",
+    textoOriginal: texto,
+  });
+
   const restantes = credito.credits === "inf" ? "ilimitados" : credito.credits;
-  await sendMessage(chatId, "Gasto registrado\n\n" + formatCat(gasto.categoria) + " - " + formatCOP(gasto.monto) + "\n" + gasto.descripcion + "\n\nRegistros restantes: " + restantes);
+  await sendMessage(chatId,
+    "Gasto registrado\n\n" + formatCat(gasto.categoria) + " - " + formatCOP(gasto.monto) + "\n" +
+    gasto.descripcion + "\n\nRegistros restantes: " + restantes
+  );
   if (credito.credits !== "inf" && credito.credits === 3) await sendMessage(chatId, "Te quedan solo 3 registros gratuitos. Activa el Plan Pro: /pro");
   if (user.plan === "pro") await verificarAlertas(chatId, telegramId);
 }
@@ -416,17 +415,14 @@ export default async function handler(req, res) {
     const textLower = text.toLowerCase();
 
     if (text === "/start") { await handleStart(chatId, user); }
-    else if (text === "/guia") { await handleAyuda(chatId); await enviarGuia(chatId); }
+    else if (text === "/guia") { await enviarGuia(chatId); }
     else if (text === "/hoy") { await handleHoy(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
     else if (text === "/semana") { await handleSemana(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
     else if (text === "/vsanterior") { await handleVsAnterior(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
     else if (text === "/mes") { await handleMes(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
-    else if (text === "/balance") { await handleBalance(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
     else if (text === "/top") { await handleTop(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
     else if (text === "/gastos") { await handleGastos(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
     else if (text === "/borrargasto") { await handleBorrarGasto(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
-    else if (text === "/ingresos") { await handleIngresos(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
-    else if (text === "/borraringreso") { await handleBorrarIngreso(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
     else if (text === "/compartir") { await handleCompartir(chatId, telegramId); await verificarMensajePro(chatId, telegramId, user); }
     else if (text === "/meta") { await handleMeta(chatId, telegramId, user, null); }
     else if (text === "/pro") { await handlePro(chatId, user); }
@@ -442,16 +438,10 @@ export default async function handler(req, res) {
       if (!transcripcion || transcripcion.trim().length < 3) return res.status(200).send("OK");
       await sendMessage(chatId, "Escuche: " + transcripcion);
 
-      // IA clasifica el audio en: ingreso, gasto o comando
       const clasificacion = await clasificarAudio(transcripcion);
-
-      if (clasificacion.tipo === "ingreso") {
-        // Ingreso detectado por IA — disponible para todos
-        await procesarIngresoDesdeClasificacion(chatId, telegramId, clasificacion.monto, clasificacion.descripcion);
-        await verificarMensajePro(chatId, telegramId, user);
-      } else if (clasificacion.tipo === "comando") {
+      if (clasificacion.tipo === "comando") {
         if (user.plan !== "pro") {
-          await sendMessage(chatId, "Los reportes por voz son exclusivos del Plan Pro.\n\nUsa los comandos escritos:\n/hoy /semana /mes /balance\n\nO activa el Plan Pro: /pro");
+          await sendMessage(chatId, "Los reportes por voz son exclusivos del Plan Pro.\n\nUsa los comandos escritos:\n/hoy /semana /mes /top\n\nO activa el Plan Pro: /pro");
           await verificarMensajePro(chatId, telegramId, user);
         } else {
           const cmd = clasificacion.comando;
@@ -459,25 +449,17 @@ export default async function handler(req, res) {
           else if (cmd === "/semana") await handleSemana(chatId, telegramId);
           else if (cmd === "/vsanterior") await handleVsAnterior(chatId, telegramId);
           else if (cmd === "/mes") await handleMes(chatId, telegramId);
-          else if (cmd === "/balance") await handleBalance(chatId, telegramId);
           else if (cmd === "/top") await handleTop(chatId, telegramId);
           else if (cmd === "/compartir") await handleCompartir(chatId, telegramId);
           else await procesarGasto(chatId, telegramId, transcripcion, true, user);
         }
       } else {
-        // Gasto — disponible para todos
         await procesarGasto(chatId, telegramId, transcripcion, true, user);
         await verificarMensajePro(chatId, telegramId, user);
       }
     }
     else if (text && text.length > 1) {
-      // Texto — intentar detectar ingreso con IA antes de tratar como gasto
-      const clasificacion = await clasificarAudio(text);
-      if (clasificacion.tipo === "ingreso") {
-        await procesarIngresoDesdeClasificacion(chatId, telegramId, clasificacion.monto, clasificacion.descripcion);
-      } else {
-        await procesarGasto(chatId, telegramId, text, false, user);
-      }
+      await procesarGasto(chatId, telegramId, text, false, user);
       await verificarMensajePro(chatId, telegramId, user);
     }
 

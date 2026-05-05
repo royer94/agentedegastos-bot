@@ -33,7 +33,6 @@ export async function getOrCreateUser(telegramId, name) {
   if (data.plan === "pro" && data.proExpira) {
     const expira = new Date(data.proExpira);
     if (new Date() > expira) {
-      // Plan vencido — bajar a free automaticamente
       const updated = { ...data, plan: "free" };
       await redis("set", key, JSON.stringify(updated));
       return { ...updated, isNew: false, proVencido: true };
@@ -57,7 +56,6 @@ export async function activarPro(telegramId) {
   const key = `user:${telegramId}`;
   const existing = await redis("get", key);
   const data = JSON.parse(existing);
-  // Calcular fecha de expiracion: hoy + 31 dias
   const expira = new Date();
   expira.setDate(expira.getDate() + 31);
   await redis("set", key, JSON.stringify({ ...data, plan: "pro", proExpira: expira.toISOString() }));
@@ -75,18 +73,8 @@ export async function guardarGasto(telegramId, gasto) {
   return doc;
 }
 
-export async function guardarIngreso(telegramId, ingreso) {
-  const fecha = new Date().toISOString();
-  const id = `ingreso:${telegramId}:${Date.now()}`;
-  const doc = { ...ingreso, telegramId: String(telegramId), fecha };
-  await redis("set", id, JSON.stringify(doc));
-  await redis("lpush", `ingresos:${telegramId}`, id);
-  await redis("ltrim", `ingresos:${telegramId}`, "0", "499");
-  return doc;
-}
-
-async function obtenerItemsDesde(telegramId, listaKey, desde) {
-  const keys = await redis("lrange", listaKey, "0", "99");
+async function obtenerGastosDesde(telegramId, desde) {
+  const keys = await redis("lrange", `gastos:${telegramId}`, "0", "99");
   if (!keys || !Array.isArray(keys) || keys.length === 0) return [];
   const items = [];
   for (const key of keys) {
@@ -101,12 +89,12 @@ async function obtenerItemsDesde(telegramId, listaKey, desde) {
 
 export async function obtenerResumenHoy(telegramId) {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
-  return obtenerItemsDesde(telegramId, `gastos:${telegramId}`, hoy.toISOString());
+  return obtenerGastosDesde(telegramId, hoy.toISOString());
 }
 
 export async function obtenerResumenSemanal(telegramId) {
   const hace7 = new Date(); hace7.setDate(hace7.getDate() - 7);
-  return obtenerItemsDesde(telegramId, `gastos:${telegramId}`, hace7.toISOString());
+  return obtenerGastosDesde(telegramId, hace7.toISOString());
 }
 
 export async function obtenerResumenSemanaPasada(telegramId) {
@@ -127,12 +115,7 @@ export async function obtenerResumenSemanaPasada(telegramId) {
 
 export async function obtenerResumenMes(telegramId) {
   const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
-  return obtenerItemsDesde(telegramId, `gastos:${telegramId}`, inicioMes.toISOString());
-}
-
-export async function obtenerIngresosMes(telegramId) {
-  const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
-  return obtenerItemsDesde(telegramId, `ingresos:${telegramId}`, inicioMes.toISOString());
+  return obtenerGastosDesde(telegramId, inicioMes.toISOString());
 }
 
 export async function obtenerTodosGastos(telegramId) {
@@ -168,13 +151,7 @@ export async function borrarGasto(telegramId, gastoKey) {
   await redis("del", gastoKey);
 }
 
-export async function borrarTodosGastos(telegramId) {
-  const keys = await redis("lrange", `gastos:${telegramId}`, "0", "499");
-  if (keys && Array.isArray(keys)) {
-    for (const key of keys) await redis("del", key);
-  }
-  await redis("del", `gastos:${telegramId}`);
-}
+// ─── META ─────────────────────────────────────────────────────────────────────
 
 export async function guardarMeta(telegramId, monto) {
   await redis("set", `meta:${telegramId}`, String(monto));
@@ -186,48 +163,14 @@ export async function obtenerMeta(telegramId) {
   return parseInt(val);
 }
 
-export async function guardarCategoriaPersonalizada(telegramId, gastoId, categoria) {
-  const raw = await redis("get", gastoId);
-  if (!raw) return;
-  const gasto = JSON.parse(raw);
-  gasto.categoria = categoria;
-  await redis("set", gastoId, JSON.stringify(gasto));
-}
-
-// ─── INGRESOS ─────────────────────────────────────────────────────────────────
-
-export async function obtenerUltimosIngresos(telegramId, limit) {
-  const keys = await redis("lrange", `ingresos:${telegramId}`, "0", String(limit - 1));
-  if (!keys || !Array.isArray(keys) || keys.length === 0) return [];
-  const items = [];
-  for (const key of keys) {
-    const raw = await redis("get", key);
-    if (!raw) continue;
-    const item = JSON.parse(raw);
-    item.id = key;
-    items.push(item);
-  }
-  return items;
-}
-
-export async function borrarIngreso(telegramId, ingresoKey) {
-  await redis("lrem", `ingresos:${telegramId}`, "1", ingresoKey);
-  await redis("del", ingresoKey);
-}
-
-// ─── CONTADOR DE COMANDOS (para mensajes de invitacion Pro) ───────────────────
+// ─── CONTADOR DE COMANDOS ─────────────────────────────────────────────────────
 
 export async function incrementarComandos(telegramId) {
-  const key = `cmds:${telegramId}`;
-  const val = await redis("incr", key);
+  const val = await redis("incr", `cmds:${telegramId}`);
   return parseInt(val);
 }
 
-export async function resetContadorComandos(telegramId) {
-  await redis("set", `cmds:${telegramId}`, "0");
-}
-
-// ─── GUIA VISTA ───────────────────────────────────────────────────────────────
+// ─── GUIA ─────────────────────────────────────────────────────────────────────
 
 export async function marcarGuiaVista(telegramId) {
   await redis("set", `guia:${telegramId}`, "1");
